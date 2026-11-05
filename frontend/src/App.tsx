@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import RateCards from "./RateCards"
 import {
   LayoutDashboard, ArrowLeftRight, Upload, FileText, CreditCard,
   RotateCcw, Settings, Search, Bell, ChevronDown, Plus,
@@ -130,7 +131,16 @@ function App() {
   }), [transactions, search, filter]);
 
   const matched = transactions.filter(t => t.status === "Matched").length;
-  const totalRisk = transactions.reduce((sum, t) => sum + Math.abs(Math.min(0, t.difference)), 0);
+  const totalRisk = transactions.reduce(
+    (sum, t) => sum + Math.max(0, -t.difference), 0
+  );
+  const totalTransactions = transactions.length;
+  const reconciledAmount = transactions.reduce(
+    (sum, t) => sum + (t.status === "Matched" ? t.actual : 0), 0
+  );
+  const pendingCount = transactions.filter(
+    t => t.status === "Missing" || t.status === "Short paid"
+  ).length;
 
   async function handleFile(file?: File) {
     if (!file) return;
@@ -302,10 +312,13 @@ function App() {
             </div>
 
             <div className="metrics-grid">
-              <Metric title="Total orders" value="2,846" change="+12.8%" positive detail="vs. previous 30 days" icon={<Wallet />} />
-              <Metric title="Reconciled amount" value="₹18.42L" change="+8.2%" positive detail="vs. previous 30 days" icon={<CircleDollarSign />} />
-              <Metric title="Pending reconciliation" value="124" change="-4.3%" positive detail="vs. previous 30 days" icon={<Clock3 />} />
-              <Metric title="Money at risk" value={money(totalRisk)} change="Needs attention" detail="Across open discrepancies" icon={<AlertCircle />} warning />
+              <Metric title="Total orders" value={totalTransactions.toLocaleString("en-IN")} change="Live data" detail="Imported payment records" icon={<Wallet />} />
+
+              <Metric title="Reconciled amount" value={money(reconciledAmount)} change="Live data" detail="Matched settlements" icon={<CircleDollarSign />} />
+
+              <Metric title="Pending reconciliation" value={pendingCount.toLocaleString("en-IN")} change="Needs review" detail="Unmatched or short-paid records" icon={<Clock3 />} />
+
+              <Metric title="Money at risk" value={money(totalRisk)} change="Needs attention" detail="Outstanding settlement shortfalls" icon={<AlertCircle />} warning />
             </div>
 
             <div className="dashboard-grid">
@@ -449,7 +462,7 @@ function App() {
             <div className="table-scroll"><table><thead><tr><th>CLAIM ID</th><th>ORDER</th><th>GATEWAY</th><th>REASON</th><th>AMOUNT</th><th>STATUS</th></tr></thead><tbody>{liveClaims.map(c => <tr key={c.id}><td className="id-cell">{c.claimNumber}</td><td>{c.reconciliationResult?.order?.orderNumber || c.reconciliationResult?.paymentRecord?.orderReference || "—"}</td><td>Demo Gateway</td><td>{c.title}</td><td className="amount-cell">{money(Number(c.amount))}</td><td><select value={c.status} onChange={async e => { const response = await apiFetch(`/claims/${c.id}/status`, { method: "PATCH", body: JSON.stringify({ status: e.target.value }) }); if (response.ok) setLiveClaims(old => old.map(item => item.id === c.id ? { ...item, status: e.target.value } : item)); }}><option value="OPEN">Open</option><option value="UNDER_REVIEW">Under review</option><option value="RESOLVED">Resolved</option><option value="REJECTED">Rejected</option></select></td></tr>)}</tbody></table></div>
           </section>}
 
-          {page === "Rate Cards" && <section className="panel table-panel"><div className="panel-heading"><div><h3>Gateway rate cards</h3><p>Configure expected transaction fees for reconciliation</p></div><button className="btn-primary"><Plus size={16} /> Add rate card</button></div><div className="table-scroll"><table><thead><tr><th>GATEWAY</th><th>PAYMENT METHOD</th><th>PLATFORM FEE</th><th>GST</th><th>FIXED FEE</th><th>STATUS</th></tr></thead><tbody>{[["Razorpay", "UPI", "0.00%", "0%", "₹0"], ["Razorpay", "Credit card", "2.00%", "18%", "₹0"], ["Cashfree", "UPI", "0.00%", "0%", "₹0"], ["Cashfree", "Credit card", "1.90%", "18%", "₹0"], ["PayU", "Credit card", "2.00%", "18%", "₹0"]].map((r, i) => <tr key={i}>{r.map((v, j) => <td key={j}>{v}</td>)}<td><Status value="Active" /></td></tr>)}</tbody></table></div></section>}
+          {page === "Rate Cards" && <RateCards />}
 
           {page === "Returns" && <Returns />}
 

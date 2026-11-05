@@ -148,6 +148,7 @@ model ReconciliationResult {
   updatedAt DateTime @updatedAt
 
   @@index([matchStatus])
+  @@index([paymentRecordId])
 }
 
 model Claim {
