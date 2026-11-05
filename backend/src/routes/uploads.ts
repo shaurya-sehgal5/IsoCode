@@ -206,9 +206,15 @@ router.post("/confirm", upload.single("file"), async (req, res) => {
           status: "PROCESSING",
           totalRows: rows.length,
           processedRows: payments.length,
-          uploadedById: user.id,
-          columnMappingId: savedMapping.id,
-        },
+
+          uploadedBy: {
+            connect: { id: req.user!.userId }
+          },
+
+          columnMapping: {
+            connect: { id: savedMapping.id }
+          }
+        }
       });
 
       let inserted = 0;
