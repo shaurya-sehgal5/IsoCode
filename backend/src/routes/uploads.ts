@@ -1,4 +1,4 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
 import { prisma } from "../lib/prisma.js";
@@ -65,7 +65,7 @@ function readRows(buffer: Buffer) {
 
 function amount(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
-  const parsed = Number(String(value).replace(/[₹,$,\s]/g, ""));
+  const parsed = Number(String(value).replace(/[â‚¹,$,\s]/g, ""));
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -96,7 +96,8 @@ router.post("/preview", upload.single("file"), async (req, res) => {
     let aiSuggestion: Awaited<ReturnType<typeof suggestColumnMapping>> | null = null;
 
     try {
-      aiSuggestion = await suggestColumnMapping(headers, data.slice(0, 5));
+      // Privacy: send column names only; never send raw customer/payment rows to Gemini.
+      aiSuggestion = await suggestColumnMapping(headers, []);
     } catch (error) {
       console.error("Gemini mapping suggestion unavailable:", error);
     }
@@ -330,3 +331,4 @@ router.patch("/mappings/:id/activate", async (req, res) => {
 });
 
 export default router;
+
