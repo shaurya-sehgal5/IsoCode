@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
@@ -12,6 +12,7 @@ import reconciliationRoutes from "./routes/reconciliation.js";
 import claimsRoutes from "./routes/claims.js";
 import rateCardsRoutes from "./routes/rateCards.js";
 import returnsRoutes from "./routes/returns.js";
+import aiMatchesRoutes from "./routes/aiMatches.js";
 
 const app = express();
 
@@ -49,5 +50,6 @@ app.use("/api/rate-cards", authenticate, (req, res, next) => {
 }, rateCardsRoutes);
 
 app.use("/api/returns", authenticate, returnsRoutes);
+app.use("/api/ai-matches", authenticate, aiMatchesRoutes);
 
 export default app;

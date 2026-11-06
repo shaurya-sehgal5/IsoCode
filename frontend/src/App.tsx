@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import RateCards from "./RateCards"
+import AIReview from "./AIReview";
 import {
   LayoutDashboard, ArrowLeftRight, Upload, FileText, CreditCard,
   RotateCcw, Settings, Search, Bell, ChevronDown, Plus,
@@ -13,7 +14,7 @@ import Returns from "./Returns";
 import { apiFetch } from "./api";
 import { canManageRateCards } from "./permissions";
 
-type Page = "Overview" | "Reconciliation" | "Imports" | "Claims" | "Rate Cards" | "Returns";
+type Page = "Overview" | "Reconciliation" | "Imports" | "Claims" | "Rate Cards" | "Returns" | "AI Review";
 
 const initialTransactions = [
   { id: "TXN-82941", order: "ORD-2026-1042", customer: "Aarav Mehta", gateway: "Razorpay", expected: 1249, actual: 1212, difference: -37, date: "Nov 05, 2026", status: "Short paid" },
@@ -37,6 +38,7 @@ const navGroups = [
       { name: "Overview", icon: LayoutDashboard },
       { name: "Reconciliation", icon: ArrowLeftRight },
       { name: "Imports", icon: Upload },
+      { name: "AI Review", icon: Sparkles },
     ]
   },
   {
@@ -48,7 +50,7 @@ const navGroups = [
   },
 ];
 
-const money = (n: number) => "₹" + Math.abs(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const money = (n: number) => "â‚¹" + Math.abs(n).toLocaleString("en-IN", { maximumFractionDigits: 0 });
 
 function App() {
   const [page, setPage] = useState<Page>("Overview");
@@ -97,14 +99,14 @@ function App() {
           return {
             id: item.paymentRecord?.externalTransactionId || item.paymentRecordId || item.id,
             order: item.order?.orderNumber || item.paymentRecord?.orderReference || "Unlinked",
-            customer: item.order?.customerName || "—",
+            customer: item.order?.customerName || "â€”",
             gateway: "Demo Gateway",
             expected,
             actual,
             difference,
             date: item.paymentRecord?.paymentDate
               ? new Date(item.paymentRecord.paymentDate).toLocaleDateString("en-IN")
-              : "—",
+              : "â€”",
             status
           };
         });
@@ -166,7 +168,7 @@ function App() {
       if (!response.ok) throw new Error(result.message || "Preview failed");
 
       setUploadPreview(result);
-      setMapping(result.suggestedMapping || {});
+      setMapping(result.aiSuggestion || result.suggestedMapping || {});
       setUploadMessage("File preview ready. Review the mappings before importing.");
     } catch (error) {
       setUploadMessage(error instanceof Error ? error.message : "Upload failed");
@@ -178,11 +180,11 @@ function App() {
   async function confirmImport() {
     if (!selectedFile) return;
 
-    const required = ["orderReference", "grossAmount", "netAmount"];
+    const required = ["grossAmount", "netAmount"];
     const missing = required.filter(field => !mapping[field]);
 
     if (missing.length) {
-      setUploadMessage("Please map Order Reference, Gross Amount and Net Amount.");
+      setUploadMessage("Please map Gross Amount and Net Amount.");
       return;
     }
 
@@ -299,8 +301,8 @@ function App() {
                         "Track returned orders and their settlement impact."}</p>
             </div>
             <div className="heading-actions">
-              {page === "Overview" && <button className="btn-secondary"><CalendarDays size={16} /> Last 30 days <ChevronDown size={14} /></button>}
-              <label className="btn-primary"><Plus size={17} /> {page === "Imports" ? "Upload statement" : "New import"}<input type="file" accept=".csv,.xlsx,.xls" hidden onChange={e => handleFile(e.target.files?.[0])} /></label>
+              {(page === "Overview") && <button className="btn-secondary"><CalendarDays size={16} /> Last 30 days <ChevronDown size={14} /></button>}
+              {(page === "Overview" || page === "Imports") && <label className="btn-primary"><Plus size={17} /> {page === "Imports" ? "Upload statement" : "New import"}<input type="file" accept=".csv,.xlsx,.xls" hidden onChange={e => handleFile(e.target.files?.[0])} /></label>}
             </div>
           </div>
 
@@ -326,7 +328,7 @@ function App() {
                 <div className="panel-heading"><div><h3>Settlement overview</h3><p>Expected vs. received settlement</p></div><button className="btn-plain">Last 7 days <ChevronDown size={14} /></button></div>
                 <div className="chart-legend"><span><i className="legend-dot purple" /> Expected</span><span><i className="legend-dot green" /> Received</span></div>
                 <div className="chart">
-                  <div className="chart-y"><span>₹5L</span><span>₹4L</span><span>₹3L</span><span>₹2L</span><span>₹1L</span><span>₹0</span></div>
+                  <div className="chart-y"><span>â‚¹5L</span><span>â‚¹4L</span><span>â‚¹3L</span><span>â‚¹2L</span><span>â‚¹1L</span><span>â‚¹0</span></div>
                   <div className="chart-main">
                     <div className="chart-gridlines"><i /><i /><i /><i /><i /><i /></div>
                     <div className="chart-bars">
@@ -339,9 +341,9 @@ function App() {
               <section className="panel gateway-panel">
                 <div className="panel-heading"><div><h3>Gateway performance</h3><p>Settlement success rate</p></div><MoreHorizontal size={20} /></div>
                 {[
-                  { name: "Razorpay", initial: "R", color: "razor", rate: "98.4%", width: "98.4%", amount: "₹8,42,500" },
-                  { name: "Cashfree", initial: "C", color: "cash", rate: "96.8%", width: "96.8%", amount: "₹6,18,200" },
-                  { name: "PayU", initial: "P", color: "payu", rate: "94.2%", width: "94.2%", amount: "₹3,61,800" },
+                  { name: "Razorpay", initial: "R", color: "razor", rate: "98.4%", width: "98.4%", amount: "â‚¹8,42,500" },
+                  { name: "Cashfree", initial: "C", color: "cash", rate: "96.8%", width: "96.8%", amount: "â‚¹6,18,200" },
+                  { name: "PayU", initial: "P", color: "payu", rate: "94.2%", width: "94.2%", amount: "â‚¹3,61,800" },
                 ].map(g => <div className="gateway-row" key={g.name}><div className={`gateway-logo ${g.color}`}>{g.initial}</div><div className="gateway-info"><div><b>{g.name}</b><strong>{g.rate}</strong></div><div className="progress-track"><i style={{ width: g.width }} /></div><span>{g.amount} settled</span></div></div>)}
               </section>
             </div>
@@ -363,7 +365,7 @@ function App() {
               <div className="upload-icon"><FileSpreadsheet size={27} /></div>
               <h3>Import settlement statement</h3>
               <p>Upload a CSV or Excel file from your payment gateway to start reconciliation.</p>
-              <label className="dropzone"><Upload size={24} /><b>Click to browse or drag your file here</b><span>CSV, XLSX or XLS · Max file size 20 MB</span><input type="file" accept=".csv,.xlsx,.xls" hidden onChange={e => handleFile(e.target.files?.[0])} /></label>
+              <label className="dropzone"><Upload size={24} /><b>Click to browse or drag your file here</b><span>CSV, XLSX or XLS Â· Max file size 20 MB</span><input type="file" accept=".csv,.xlsx,.xls" hidden onChange={e => handleFile(e.target.files?.[0])} /></label>
               {uploaded && <div className="upload-success"><CheckCircle2 size={18} /> {fileName} selected. Ready for column mapping.</div>}
               {uploadBusy && <div className="upload-success">Processing file, please wait...</div>}
 
@@ -378,7 +380,7 @@ function App() {
                   <div className="panel-heading">
                     <div>
                       <h3>Review column mapping</h3>
-                      <p>{uploadPreview.file.totalRows.toLocaleString()} rows detected · Showing first 20 rows</p>
+                      <p>{uploadPreview.file.totalRows.toLocaleString()} rows detected Â· Showing first 20 rows</p>
                     </div>
                   </div>
 
@@ -393,7 +395,7 @@ function App() {
                       ["status", "Payment Status"]
                     ].map(([field, label]) => (
                       <label key={field} style={{ display: "grid", gap: 6, fontSize: 13 }}>
-                        <b>{label}{["orderReference", "grossAmount", "netAmount"].includes(field) ? " *" : ""}</b>
+                        <b>{label}{["grossAmount", "netAmount"].includes(field) ? " *" : ""}</b>
                         <select
                           value={mapping[field] || ""}
                           onChange={e => setMapping(old => ({
@@ -452,21 +454,22 @@ function App() {
             </section>
             <section className="panel">
               <div className="panel-heading"><div><h3>Recent imports</h3><p>Your uploaded settlement statements</p></div></div>
-              {["razorpay_settlement_nov04.csv", "cashfree_payout_oct31.xlsx", "payu_settlement_oct30.csv"].map((f, i) => <div className="import-row" key={f}><div className="file-icon"><FileSpreadsheet size={19} /></div><div><b>{f}</b><span>{["Nov 04, 2026 · 248 rows", "Oct 31, 2026 · 182 rows", "Oct 30, 2026 · 315 rows"][i]}</span></div><Status value={i === 0 ? "Completed" : i === 1 ? "Completed" : "Processing"} /></div>)}
+              {["razorpay_settlement_nov04.csv", "cashfree_payout_oct31.xlsx", "payu_settlement_oct30.csv"].map((f, i) => <div className="import-row" key={f}><div className="file-icon"><FileSpreadsheet size={19} /></div><div><b>{f}</b><span>{["Nov 04, 2026 Â· 248 rows", "Oct 31, 2026 Â· 182 rows", "Oct 30, 2026 Â· 315 rows"][i]}</span></div><Status value={i === 0 ? "Completed" : i === 1 ? "Completed" : "Processing"} /></div>)}
             </section>
           </div>}
 
           {page === "Claims" && <section className="panel table-panel">
             <div className="recon-stats"><div><span>Total claims</span><b>{liveClaims.length}</b></div><div><span>Open</span><b className="red-text">{liveClaims.filter(c => c.status === "OPEN").length}</b></div><div><span>Under review</span><b>{liveClaims.filter(c => c.status === "UNDER_REVIEW").length}</b></div><div><span>Resolved</span><b className="green-text">{liveClaims.filter(c => c.status === "RESOLVED").length}</b></div></div>
             <div className="panel-heading"><div><h3>Claims register</h3><p>Track gateway payment discrepancies</p></div><button className="btn-secondary"><Download size={15} /> Export claims</button></div>
-            <div className="table-scroll"><table><thead><tr><th>CLAIM ID</th><th>ORDER</th><th>GATEWAY</th><th>REASON</th><th>AMOUNT</th><th>STATUS</th></tr></thead><tbody>{liveClaims.map(c => <tr key={c.id}><td className="id-cell">{c.claimNumber}</td><td>{c.reconciliationResult?.order?.orderNumber || c.reconciliationResult?.paymentRecord?.orderReference || "—"}</td><td>Demo Gateway</td><td>{c.title}</td><td className="amount-cell">{money(Number(c.amount))}</td><td><select value={c.status} onChange={async e => { const response = await apiFetch(`/claims/${c.id}/status`, { method: "PATCH", body: JSON.stringify({ status: e.target.value }) }); if (response.ok) setLiveClaims(old => old.map(item => item.id === c.id ? { ...item, status: e.target.value } : item)); }}><option value="OPEN">Open</option><option value="UNDER_REVIEW">Under review</option><option value="RESOLVED">Resolved</option><option value="REJECTED">Rejected</option></select></td></tr>)}</tbody></table></div>
+            <div className="table-scroll"><table><thead><tr><th>CLAIM ID</th><th>ORDER</th><th>GATEWAY</th><th>REASON</th><th>AMOUNT</th><th>STATUS</th></tr></thead><tbody>{liveClaims.map(c => <tr key={c.id}><td className="id-cell">{c.claimNumber}</td><td>{c.reconciliationResult?.order?.orderNumber || c.reconciliationResult?.paymentRecord?.orderReference || "â€”"}</td><td>Demo Gateway</td><td>{c.title}</td><td className="amount-cell">{money(Number(c.amount))}</td><td><select value={c.status} onChange={async e => { const response = await apiFetch(`/claims/${c.id}/status`, { method: "PATCH", body: JSON.stringify({ status: e.target.value }) }); if (response.ok) setLiveClaims(old => old.map(item => item.id === c.id ? { ...item, status: e.target.value } : item)); }}><option value="OPEN">Open</option><option value="UNDER_REVIEW">Under review</option><option value="RESOLVED">Resolved</option><option value="REJECTED">Rejected</option></select></td></tr>)}</tbody></table></div>
           </section>}
 
           {page === "Rate Cards" && <RateCards />}
 
           {page === "Returns" && <Returns />}
+{page === "AI Review" && <AIReview />}
 
-          <footer className="footer"><span>© 2026 SettleFlow. Finance, in flow.</span><span>Made for clarity <span className="footer-heart">♥</span></span></footer>
+          <footer className="footer"><span>Â© 2026 SettleFlow. Finance, in flow.</span><span>Made for clarity <span className="footer-heart">â™¥</span></span></footer>
         </div>
       </main>
     </div>
@@ -484,9 +487,12 @@ function Status({ value }: { value: string }) {
 
 function TransactionTable({ rows, onClaim }: { rows: typeof initialTransactions, onClaim: (id: string) => void }) {
   return <div className="table-scroll"><table><thead><tr><th>TRANSACTION / ORDER</th><th>CUSTOMER</th><th>GATEWAY</th><th>EXPECTED</th><th>RECEIVED</th><th>DIFFERENCE</th><th>STATUS</th><th></th></tr></thead><tbody>
-    {rows.map(t => <tr key={t.id}><td><b className="id-cell">{t.id}</b><span className="sub-cell">{t.order}</span></td><td>{t.customer}</td><td>{t.gateway}</td><td>{money(t.expected)}</td><td>{money(t.actual)}</td><td className={t.difference < 0 ? "red-text" : "green-text"}>{t.difference === 0 ? "—" : (t.difference < 0 ? "-" : "+") + money(t.difference)}</td><td><Status value={t.status} /></td><td>{t.difference !== 0 && t.status !== "Claim created" && <button className="claim-button" onClick={() => onClaim(t.id)}>Create claim</button>}</td></tr>)}
+    {rows.map(t => <tr key={t.id}><td><b className="id-cell">{t.id}</b><span className="sub-cell">{t.order}</span></td><td>{t.customer}</td><td>{t.gateway}</td><td>{money(t.expected)}</td><td>{money(t.actual)}</td><td className={t.difference < 0 ? "red-text" : "green-text"}>{t.difference === 0 ? "â€”" : (t.difference < 0 ? "-" : "+") + money(t.difference)}</td><td><Status value={t.status} /></td><td>{t.difference !== 0 && t.status !== "Claim created" && <button className="claim-button" onClick={() => onClaim(t.id)}>Create claim</button>}</td></tr>)}
     {rows.length === 0 && <tr><td colSpan={8} className="no-results">No transactions match your search.</td></tr>}
   </tbody></table></div>;
 }
 
 export default App;
+
+
+

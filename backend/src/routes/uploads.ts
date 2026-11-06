@@ -1,8 +1,8 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
-import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma.js";
+import { suggestColumnMapping } from "../services/gemini.js";
 
 const router = Router();
 
@@ -80,7 +80,7 @@ function mappedValue(row: Record<string, unknown>, column?: string | null) {
   return row[column];
 }
 
-router.post("/preview", upload.single("file"), (req, res) => {
+router.post("/preview", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "Please upload a file" });
@@ -93,6 +93,14 @@ router.post("/preview", upload.single("file"), (req, res) => {
       return res.status(400).json({ success: false, message: "No column headers found" });
     }
 
+    let aiSuggestion: Awaited<ReturnType<typeof suggestColumnMapping>> | null = null;
+
+    try {
+      aiSuggestion = await suggestColumnMapping(headers, data.slice(0, 5));
+    } catch (error) {
+      console.error("Gemini mapping suggestion unavailable:", error);
+    }
+
     return res.json({
       success: true,
       file: {
@@ -103,6 +111,10 @@ router.post("/preview", upload.single("file"), (req, res) => {
       },
       headers,
       suggestedMapping: suggestMapping(headers),
+      aiSuggestion: aiSuggestion?.mapping ?? null,
+      aiConfidence: aiSuggestion?.confidence ?? null,
+      aiExplanation: aiSuggestion?.explanation ?? null,
+      mappingSource: aiSuggestion ? "GEMINI_AI" : "RULE_BASED_FALLBACK",
       preview: data.slice(0, 20),
       message: "File parsed. Review suggested mappings before importing.",
     });
@@ -128,10 +140,10 @@ router.post("/confirm", upload.single("file"), async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid mapping JSON" });
     }
 
-    if (!mapping.orderReference || !mapping.grossAmount || !mapping.netAmount) {
+    if (!mapping.grossAmount || !mapping.netAmount) {
       return res.status(400).json({
         success: false,
-        message: "Map Order Reference, Gross Amount and Net Amount before confirming.",
+        message: "Map Gross Amount and Net Amount before confirming.",
       });
     }
 
@@ -145,7 +157,7 @@ router.post("/confirm", upload.single("file"), async (req, res) => {
       const net = amount(mappedValue(row, mapping.netAmount));
       const orderReference = String(mappedValue(row, mapping.orderReference) ?? "").trim();
 
-      if (gross === null || net === null || !orderReference) return [];
+      if (gross === null || net === null) return [];
 
       const fees = amount(mappedValue(row, mapping.fees)) ?? Math.max(0, gross - net);
       const transactionValue = mappedValue(row, mapping.transactionId);
@@ -153,7 +165,7 @@ router.post("/confirm", upload.single("file"), async (req, res) => {
 
       return [{
         externalTransactionId: transactionId || null,
-        orderReference,
+        orderReference: orderReference || null,
         grossAmount: gross,
         fees,
         netAmount: net,
@@ -169,32 +181,28 @@ router.post("/confirm", upload.single("file"), async (req, res) => {
       });
     }
 
-    // Temporary demo account until the sign-in flow is connected.
-    const passwordHash = await bcrypt.hash("SettleFlowDemo!2026", 10);
-    const user = await prisma.user.upsert({
-      where: { email: "demo@settleflow.local" },
-      update: {},
-      create: {
-        name: "Demo Finance User",
-        email: "demo@settleflow.local",
-        passwordHash,
-        role: "FINANCE_EXECUTIVE",
-      },
-    });
-
-    const result = await prisma.$transaction(async tx => {
+        const result = await prisma.$transaction(async tx => {
       const previousMappings = await tx.columnMapping.findMany({
-        where: { createdById: user.id, sourceName: req.file!.originalname },
+        where: { createdById: req.user!.userId, sourceName: req.file!.originalname },
         select: { version: true },
       });
       const version = previousMappings.reduce((max, item) => Math.max(max, item.version), 0) + 1;
+
+      await tx.columnMapping.updateMany({
+        where: {
+          createdById: req.user!.userId,
+          sourceName: req.file!.originalname,
+          isActive: true
+        },
+        data: { isActive: false }
+      });
 
       const savedMapping = await tx.columnMapping.create({
         data: {
           sourceName: req.file!.originalname,
           version,
           mapping: mapping as object,
-          createdById: user.id,
+          createdById: req.user!.userId,
         },
       });
 
@@ -257,6 +265,66 @@ router.post("/confirm", upload.single("file"), async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Import failed. Check the backend logs.",
+    });
+  }
+});
+
+
+router.get("/mappings", async (req, res) => {
+  try {
+    const mappings = await prisma.columnMapping.findMany({
+      where: { createdById: req.user!.userId },
+      orderBy: [{ sourceName: "asc" }, { version: "desc" }]
+    });
+    return res.json({ success: true, mappings });
+  } catch (error) {
+    console.error("Mapping history error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Could not load mapping history."
+    });
+  }
+});
+
+router.patch("/mappings/:id/activate", async (req, res) => {
+  try {
+    const mapping = await prisma.columnMapping.findFirst({
+      where: {
+        id: req.params.id,
+        createdById: req.user!.userId
+      }
+    });
+
+    if (!mapping) {
+      return res.status(404).json({
+        success: false,
+        message: "Mapping version not found."
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.columnMapping.updateMany({
+        where: {
+          createdById: req.user!.userId,
+          sourceName: mapping.sourceName
+        },
+        data: { isActive: false }
+      }),
+      prisma.columnMapping.update({
+        where: { id: mapping.id },
+        data: { isActive: true }
+      })
+    ]);
+
+    return res.json({
+      success: true,
+      message: `Mapping version ${mapping.version} activated.`
+    });
+  } catch (error) {
+    console.error("Mapping rollback error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Could not activate mapping version."
     });
   }
 });

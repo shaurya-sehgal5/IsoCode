@@ -35,6 +35,7 @@ enum ClaimStatus {
 }
 
 model User {
+  reviewedAiSuggestions AiMatchSuggestion[] @relation("AiSuggestionReviewer")
   id           String   @id @default(cuid())
   name         String
   email        String   @unique
@@ -58,6 +59,7 @@ model Order {
   status       String    @default("PLACED")
 
   reconciliationResults ReconciliationResult[]
+  aiMatchSuggestions AiMatchSuggestion[]
   returns               ReturnRecord[]
 
   createdAt DateTime @default(now())
@@ -121,6 +123,7 @@ model PaymentRecord {
   importBatch   ImportBatch @relation(fields: [importBatchId], references: [id])
 
   reconciliationResults ReconciliationResult[]
+  aiMatchSuggestions AiMatchSuggestion[]
 
   createdAt DateTime @default(now())
 
@@ -203,4 +206,33 @@ model ReturnRecord {
 
   @@index([orderReference])
   @@index([status])
+}
+
+enum AiSuggestionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AiMatchSuggestion {
+  id               String             @id @default(cuid())
+  paymentRecordId  String
+  suggestedOrderId String
+  confidence       Float
+  reason           String
+  evidence         Json
+  status           AiSuggestionStatus @default(PENDING)
+  reviewedById     String?
+  reviewedAt       DateTime?
+
+  paymentRecord  PaymentRecord @relation(fields: [paymentRecordId], references: [id])
+  suggestedOrder Order         @relation(fields: [suggestedOrderId], references: [id])
+  reviewedBy     User?         @relation("AiSuggestionReviewer", fields: [reviewedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([paymentRecordId, suggestedOrderId])
+  @@index([status])
+  @@index([paymentRecordId])
 }
