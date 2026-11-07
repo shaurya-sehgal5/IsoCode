@@ -3,7 +3,7 @@
 **Payment Reconciliation & Claims Management Platform**
 
 SettleFlow is a finance operations application designed to help businesses reconcile payment partner settlements against internal orders, identify discrepancies, manage claims and returns, and use AI-assisted workflows to reduce manual reconciliation effort.
-
+ 
 ## Table of Contents
 
 - [Overview](#overview)
